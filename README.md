@@ -38,6 +38,34 @@ tenant-scoped CRUD pattern, so new ones like this are cheap to add later
   mark for a whole class in one call) and teacher attendance, both with
   upsert-on-remark semantics and a summary/counts endpoint.
 
+- **Phase 4 (Finance):** fee categories, fee structures (per class/term/
+  year), invoice generation from those structures with discounts applied
+  as line items, manual payment recording, live M-Pesa Daraja STK push
+  (initiate + callback), balance and financial summary reports.
+
+### Finance endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `/api/finance/fee-categories` | standard CRUD |
+| `/api/finance/fee-structures` | standard CRUD — `class_id` null = applies to all classes |
+| `/api/finance/discounts` | standard CRUD — student scholarships/discounts, `fee_category_id` null = whole-invoice discount |
+| `POST /api/finance/invoices/generate` | `{ student_id, academic_year_id, term_id?, due_date? }` — builds invoice from matching fee structures + discounts |
+| `GET /api/finance/invoices` | filters: `student_id`, `status`, `academic_year_id`, `term_id` |
+| `GET /api/finance/invoices/:id` | full invoice with line items + payments |
+| `PATCH /api/finance/invoices/:id` | manual `status`/`due_date` correction |
+| `POST /api/finance/payments` | record a manual payment (cash/bank/cheque/already-confirmed mpesa) |
+| `GET /api/finance/payments` | filters: `student_id`, `invoice_id`, `method`, `status`, `from`, `to` |
+| `POST /api/finance/payments/mpesa/initiate` | `{ student_id, invoice_id?, amount, phone, account_reference? }` — sends a real STK push |
+| `POST /api/finance/payments/mpesa/callback` | **public**, no `x-school-id` — Safaricom posts here; not behind tenant middleware |
+| `GET /api/finance/students/:studentId/balance` | outstanding balance for one student |
+| `GET /api/finance/reports/summary` | filters: `academic_year_id`, `term_id`, `class_id` — totals invoiced/collected/outstanding |
+
+**M-Pesa setup:** get sandbox credentials at developer.safaricom.co.ke,
+fill in the `MPESA_*` vars in `.env`, and make sure `MPESA_CALLBACK_URL`
+is a public HTTPS URL Safaricom can reach (use ngrok for local testing —
+Daraja cannot call `localhost`).
+
 ### Attendance endpoints
 
 | Endpoint | Notes |
@@ -59,6 +87,7 @@ tenant-scoped CRUD pattern, so new ones like this are cheap to add later
    - `migrations/002_students.sql`
    - `migrations/003_academic.sql`
    - `migrations/004_attendance.sql`
+   - `migrations/005_finance.sql`
 3. Copy `.env.example` to `.env` and fill in your Supabase URL + service
    role key (Project Settings → API).
 4. Install and run:
@@ -147,7 +176,8 @@ src/
   server.js            Entry point
 ```
 
-## Next up (Phase 4)
+## Next up (Phase 5)
 
-Exams → Finance → Portals, then login/auth to replace the `x-school-id`
-header with real JWT-based tenant resolution.
+Exams (scheduling, marks entry, grading, report cards) → Portals
+(parent/student/teacher views), then login/auth to replace the
+`x-school-id` header with real JWT-based tenant resolution.
