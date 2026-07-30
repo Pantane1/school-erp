@@ -10,6 +10,46 @@ Multi-tenant SaaS backend. Node/Express + Supabase (Postgres). Login/auth is
 - **Phase 1 (Student Management):** admissions, profiles, guardians,
   emergency contacts, medical records, documents, bulk import/export,
   search/filter/pagination.
+- **Phase 2 (Academic Management):** departments, subjects, terms/
+  semesters (with a "set current" endpoint), full CRUD on academic years
+  and classes, and course allocation (`class_subjects` — which subject is
+  taught in which class by which teacher).
+
+### Academic Management endpoints
+
+| Resource | Base path | Notes |
+|---|---|---|
+| Academic years | `/api/academic-years` | + `POST /:id/set-current` |
+| Terms | `/api/terms` | + `POST /:id/set-current` (scoped to its academic year) |
+| Classes | `/api/classes` | |
+| Departments | `/api/departments` | |
+| Subjects | `/api/subjects` | |
+| Course allocation | `/api/class-subjects` | links class ↔ subject ↔ teacher |
+
+All support `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`.
+List endpoints support `?page=&limit=` and `?filter[field]=value`.
+
+These six were built off a shared `src/utils/crudFactory.js` +
+`src/utils/routeFactory.js` — reference/lookup tables share the same
+tenant-scoped CRUD pattern, so new ones like this are cheap to add later
+(e.g. exam types, fee categories).
+
+- **Phase 3 (Attendance):** student attendance (per class, per day, bulk
+  mark for a whole class in one call) and teacher attendance, both with
+  upsert-on-remark semantics and a summary/counts endpoint.
+
+### Attendance endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/attendance/students/bulk` | `{ class_id, term_id?, attendance_date, records: [{student_id, status?, notes?}] }` — marks a whole class at once, upserts per student/day |
+| `GET /api/attendance/students` | filters: `class_id`, `student_id`, `status`, `date`, `from`, `to` |
+| `GET /api/attendance/students/summary` | `student_id` or `class_id`, plus `from`/`to` — returns present/absent/late/excused counts |
+| `PATCH /api/attendance/students/:id` / `DELETE /:id` | correct or remove a single record |
+| `POST /api/attendance/teachers` | `{ teacher_id, attendance_date, status?, notes? }` — upserts on teacher+day |
+| `GET /api/attendance/teachers` | filters: `teacher_id`, `status`, `date`, `from`, `to` |
+| `GET /api/attendance/teachers/summary` | `teacher_id` (required), plus `from`/`to` |
+| `PATCH /api/attendance/teachers/:id` / `DELETE /:id` | correct or remove a single record |
 
 ## Setup
 
@@ -17,6 +57,8 @@ Multi-tenant SaaS backend. Node/Express + Supabase (Postgres). Login/auth is
 2. In the Supabase SQL editor, run the migrations **in order**:
    - `migrations/001_init_core.sql`
    - `migrations/002_students.sql`
+   - `migrations/003_academic.sql`
+   - `migrations/004_attendance.sql`
 3. Copy `.env.example` to `.env` and fill in your Supabase URL + service
    role key (Project Settings → API).
 4. Install and run:
@@ -105,8 +147,7 @@ src/
   server.js            Entry point
 ```
 
-## Next up (Phase 2)
+## Next up (Phase 4)
 
-Academic Management expansion → Attendance → Exams → Finance → Portals,
-then login/auth to replace the `x-school-id` header with real JWT-based
-tenant resolution.
+Exams → Finance → Portals, then login/auth to replace the `x-school-id`
+header with real JWT-based tenant resolution.
