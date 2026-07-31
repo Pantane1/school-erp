@@ -1,6 +1,4 @@
-const { createCrudController } = require('../utils/crudFactory');
+const gradingScaleController = require('../controllers/gradingScaleController');
+const { buildCrudRouter } = require('../utils/routeFactory');
 
-module.exports = createCrudController('grading_scales', {
-  allowedFields: ['grade', 'min_score', 'max_score', 'grade_point', 'remarks'],
-  orderBy: 'min_score',
-});
+module.exports = buildCrudRouter(gradingScaleController);
