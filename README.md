@@ -66,6 +66,24 @@ fill in the `MPESA_*` vars in `.env`, and make sure `MPESA_CALLBACK_URL`
 is a public HTTPS URL Safaricom can reach (use ngrok for local testing —
 Daraja cannot call `localhost`).
 
+### Exams endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `/api/exams/types` | standard CRUD — CAT, Midterm, Final, etc. |
+| `/api/exams/grading-scales` | standard CRUD — school-configurable score→grade boundaries (e.g. 80-100 = A, GPA 4.0) |
+| `/api/exams` | standard CRUD — an exam sitting within a term |
+| `/api/exams/schedule` | standard CRUD on `exam_subjects` — the timetable: one subject paper for one class within an exam (`max_marks`, `exam_date`, `start_time`, `end_time`) |
+| `POST /api/exams/marks/bulk` | `{ exam_subject_id, records: [{student_id, marks_obtained, remarks?}] }` — enters a whole class's scores for one paper in one call, auto-grades each via `grading_scales` |
+| `GET /api/exams/marks` | filters: `exam_subject_id`, `student_id` |
+| `PATCH /api/exams/marks/:id` | correct one score — re-grades automatically |
+| `GET /api/exams/:examId/report-cards/:studentId` | per-subject scores/grades, average, overall grade, GPA |
+| `GET /api/exams/:examId/rankings?class_id=` | every student in the class ranked by average marks across the exam's subjects |
+
+Auto-grading resolves against whatever's configured in `grading_scales` for
+the school — set that up before entering marks, or grades will come back
+`null` (scores still save fine).
+
 ### Attendance endpoints
 
 | Endpoint | Notes |
@@ -88,6 +106,7 @@ Daraja cannot call `localhost`).
    - `migrations/003_academic.sql`
    - `migrations/004_attendance.sql`
    - `migrations/005_finance.sql`
+   - `migrations/006_exams.sql`
 3. Copy `.env.example` to `.env` and fill in your Supabase URL + service
    role key (Project Settings → API).
 4. Install and run:
@@ -176,8 +195,8 @@ src/
   server.js            Entry point
 ```
 
-## Next up (Phase 5)
+## Next up (Phase 6)
 
-Exams (scheduling, marks entry, grading, report cards) → Portals
-(parent/student/teacher views), then login/auth to replace the
-`x-school-id` header with real JWT-based tenant resolution.
+Portals (parent/student/teacher views over what's already built), then
+login/auth to replace the `x-school-id` header with real JWT-based
+tenant resolution.

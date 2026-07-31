@@ -10,6 +10,7 @@ const classSubjectRoutes = require('./classSubjectRoutes');
 const studentAttendanceRoutes = require('./studentAttendanceRoutes');
 const teacherAttendanceRoutes = require('./teacherAttendanceRoutes');
 const financeRoutes = require('./financeRoutes');
+const examRoutes = require('./examRoutes');
 
 router.use('/students', studentRoutes);
 router.use('/academic-years', academicYearRoutes);
@@ -21,5 +22,6 @@ router.use('/class-subjects', classSubjectRoutes);
 router.use('/attendance/students', studentAttendanceRoutes);
 router.use('/attendance/teachers', teacherAttendanceRoutes);
 router.use('/finance', financeRoutes);
+router.use('/exams', examRoutes);
 
 module.exports = router;
