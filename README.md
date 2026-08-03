@@ -84,6 +84,20 @@ Auto-grading resolves against whatever's configured in `grading_scales` for
 the school — set that up before entering marks, or grades will come back
 `null` (scores still save fine).
 
+### Portals endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `/api/announcements` | standard CRUD — `audience`: `all`/`students`/`parents`/`teachers`, optional `class_id` to target one class |
+| `GET /api/portal/students/:studentId` | student dashboard: profile, 30-day attendance summary, fee balance, 5 most recent marks, relevant announcements |
+| `GET /api/portal/parents/:studentId` | same payload as the student dashboard — a parent views their child's data |
+| `GET /api/portal/teachers/:teacherId` | teacher dashboard: assigned classes/subjects, whether each class's attendance was marked today, relevant announcements |
+
+These are read-only aggregation endpoints over data you've already built
+(students, attendance, finance, exams, announcements) — they don't add
+new tables beyond `announcements`. Once login/auth exists, these become
+the natural landing views for each role after sign-in.
+
 ### Attendance endpoints
 
 | Endpoint | Notes |
@@ -107,6 +121,7 @@ the school — set that up before entering marks, or grades will come back
    - `migrations/004_attendance.sql`
    - `migrations/005_finance.sql`
    - `migrations/006_exams.sql`
+   - `migrations/007_portals.sql`
 3. Copy `.env.example` to `.env` and fill in your Supabase URL + service
    role key (Project Settings → API).
 4. Install and run:
@@ -195,8 +210,10 @@ src/
   server.js            Entry point
 ```
 
-## Next up (Phase 6)
+## Next up (Phase 7 — the last one)
 
-Portals (parent/student/teacher views over what's already built), then
-login/auth to replace the `x-school-id` header with real JWT-based
-tenant resolution.
+Login/auth: Supabase Auth issuing JWTs with a `school_id` custom claim,
+replacing the temporary `x-school-id` header in `tenantContext.js`. Once
+that's in, the RLS policies already sitting in every migration start
+enforcing tenant isolation at the database level and this whole system
+moves from "dev-mode" to production-safe.
