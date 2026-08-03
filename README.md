@@ -56,6 +56,58 @@ tenant-scoped CRUD pattern, so new ones like this are cheap to add later
   routes. No new migration needed — reuses the `users`/`roles` tables
   from Phase 0.
 
+- **Phase 8 (Library, Hostel, Transport, HR):** the four modules the
+  original spec listed that were deferred earlier. See the dedicated
+  sections below for each.
+
+### Library endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `/api/library/books` | standard CRUD |
+| `POST /api/library/borrowings` | `{ book_id, student_id? or borrower_user_id?, due_date? }` — fails if no copies available, decrements `available_copies` |
+| `POST /api/library/borrowings/:id/return` | computes a fine (`LIBRARY_FINE_PER_DAY` × days late) automatically, restores `available_copies` |
+| `GET /api/library/borrowings` | filters: `status`, `book_id`, `student_id`, `borrower_user_id` |
+| `GET /api/library/overdue` | everything still `borrowed` past its `due_date` |
+
+### Hostel endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `/api/hostel/rooms` | standard CRUD |
+| `/api/hostel/visitors` | standard CRUD — visitor log per student |
+| `POST /api/hostel/allocations` | `{ room_id, student_id }` — fails if room is at capacity or student already has an active allocation |
+| `POST /api/hostel/allocations/:id/vacate` | frees the room |
+| `GET /api/hostel/allocations` | filters: `room_id`, `student_id`, `status` |
+
+### Transport endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `/api/transport/vehicles` | standard CRUD |
+| `/api/transport/routes` | standard CRUD |
+| `/api/transport/pickup-points` | standard CRUD — scoped to a route, `sequence_order` for stop ordering |
+| `/api/transport/assignments` | standard CRUD — assigns a student to a route/pickup point (one active assignment per student) |
+
+### HR endpoints
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/hr/employees` | lists `users` with employment fields + roles; filters: `department_id`, `employment_status`, `role` |
+| `GET /api/hr/employees/:id` | one employee's full profile |
+| `PATCH /api/hr/employees/:id` | updates `job_title`, `department_id`, `employment_date`, `employment_status`, `phone` — employee *creation* still happens via `POST /api/auth/register`, since every employee is a `users` row |
+| `POST /api/hr/leave-requests` | `{ user_id, leave_type, start_date, end_date, reason? }` |
+| `GET /api/hr/leave-requests` | filters: `user_id`, `status`, `leave_type` |
+| `POST /api/hr/leave-requests/:id/decide` | `{ status: 'approved'\|'rejected', approved_by? }` |
+| `/api/hr/payroll` | standard CRUD — `net_salary` auto-computed by Postgres (`basic_salary + allowances - deductions`) |
+| `POST /api/hr/payroll/:id/mark-paid` | flips a record to `paid` with today's date |
+
+**Intentionally out of scope for HR:** recruitment, performance reviews,
+and training — these need workflow/document features beyond what a
+handful of tables would meaningfully capture. `employees` also isn't a
+separate table — it deliberately reuses `users` (every employee already
+has a login), extended with employment columns.
+
 ### Finance endpoints
 
 | Endpoint | Notes |
@@ -136,6 +188,10 @@ the natural landing views for each role after sign-in.
    - `migrations/006_exams.sql`
    - `migrations/007_portals.sql`
    (Auth/Phase 7 needs no new migration — it reuses `users`/`roles` from 001.)
+   - `migrations/008_library.sql`
+   - `migrations/009_hostel.sql`
+   - `migrations/010_transport.sql`
+   - `migrations/011_hr.sql`
 3. Copy `.env.example` to `.env` and fill in your Supabase URL + service
    role key (Project Settings → API), plus a random `JWT_SECRET` (used to
    sign this API's own tokens — see the Auth section below).
@@ -277,19 +333,23 @@ src/
   server.js            Entry point
 ```
 
-## Status: all phases complete
+## Status: full spec built
 
 Every module from the original spec is built and wired together:
 foundation/multi-tenancy, Student Management, Academic Management,
-Attendance, Finance (incl. live M-Pesa STK push), Exams, Portals, and
-now Auth. `src/middleware/tenantContext.js` is dead code — safe to
-delete.
+Attendance, Finance (incl. live M-Pesa STK push), Exams, Portals, Auth,
+Library, Hostel, Transport, and HR. `src/middleware/tenantContext.js` is
+dead code — safe to delete.
 
-**Reasonable next steps from here**, roughly in order of value:
-1. Lock down more routes with `requireRole()` (see the Auth section above)
+**What's left, roughly in order of value:**
+1. Lock down more routes with `requireRole()` (see the Auth section
+   above) — most routes right now just require *any* valid token, not a
+   specific role
 2. Add automated tests (none exist yet — this was built for speed of
    iteration, not test coverage)
 3. API documentation (Swagger/OpenAPI, per the original spec)
-4. Any of the modules the original spec listed that this build
-   intentionally scoped down (Library, Hostel, Transport, Inventory, HR,
-   AI features, multi-school branding/subdomain routing, PWA/offline)
+4. Genuinely deferred: Inventory, AI features (report generation,
+   predictive analytics, chatbots, timetable optimization), multi-school
+   branding/subdomain routing, PWA/offline support — these need either
+   a product decision (which AI features actually matter) or
+   infrastructure beyond a REST API (subdomain routing, service workers)

@@ -13,6 +13,10 @@ const financeRoutes = require('./financeRoutes');
 const examRoutes = require('./examRoutes');
 const announcementRoutes = require('./announcementRoutes');
 const portalRoutes = require('./portalRoutes');
+const libraryRoutes = require('./libraryRoutes');
+const hostelRoutes = require('./hostelRoutes');
+const transportRoutes = require('./transportRoutes');
+const hrRoutes = require('./hrRoutes');
 
 router.use('/students', studentRoutes);
 router.use('/academic-years', academicYearRoutes);
@@ -27,5 +31,9 @@ router.use('/finance', financeRoutes);
 router.use('/exams', examRoutes);
 router.use('/announcements', announcementRoutes);
 router.use('/portal', portalRoutes);
+router.use('/library', libraryRoutes);
+router.use('/hostel', hostelRoutes);
+router.use('/transport', transportRoutes);
+router.use('/hr', hrRoutes);
 
 module.exports = router;
