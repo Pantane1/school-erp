@@ -1,7 +1,8 @@
-# School ERP Backend — Phase 0 + Student Management
+# School ERP Backend
 
-Multi-tenant SaaS backend. Node/Express + Supabase (Postgres). Login/auth is
-**not built yet** — see "Temporary tenant handling" below.
+Multi-tenant SaaS backend. Node/Express + Supabase (Postgres). Full auth
+is wired in — see the "Auth" section below for how login/registration
+works.
 
 ## What's included
 
@@ -43,6 +44,18 @@ tenant-scoped CRUD pattern, so new ones like this are cheap to add later
   as line items, manual payment recording, live M-Pesa Daraja STK push
   (initiate + callback), balance and financial summary reports.
 
+- **Phase 5 (Exams):** exam types, grading scales, exams, subject/class
+  scheduling, marks entry with auto-grading, report cards, class rankings.
+
+- **Phase 6 (Portals):** announcements + student/parent/teacher dashboard
+  aggregation endpoints over everything else that's been built.
+
+- **Phase 7 (Auth):** school self-registration, login, staff/user
+  registration, current-user profile — backed by Supabase Auth for
+  credential storage, with this API issuing its own JWT for all other
+  routes. No new migration needed — reuses the `users`/`roles` tables
+  from Phase 0.
+
 ### Finance endpoints
 
 | Endpoint | Notes |
@@ -57,7 +70,7 @@ tenant-scoped CRUD pattern, so new ones like this are cheap to add later
 | `POST /api/finance/payments` | record a manual payment (cash/bank/cheque/already-confirmed mpesa) |
 | `GET /api/finance/payments` | filters: `student_id`, `invoice_id`, `method`, `status`, `from`, `to` |
 | `POST /api/finance/payments/mpesa/initiate` | `{ student_id, invoice_id?, amount, phone, account_reference? }` — sends a real STK push |
-| `POST /api/finance/payments/mpesa/callback` | **public**, no `x-school-id` — Safaricom posts here; not behind tenant middleware |
+| `POST /api/finance/payments/mpesa/callback` | **public** — Safaricom posts here directly; not behind the `authenticate` middleware |
 | `GET /api/finance/students/:studentId/balance` | outstanding balance for one student |
 | `GET /api/finance/reports/summary` | filters: `academic_year_id`, `term_id`, `class_id` — totals invoiced/collected/outstanding |
 
@@ -122,8 +135,10 @@ the natural landing views for each role after sign-in.
    - `migrations/005_finance.sql`
    - `migrations/006_exams.sql`
    - `migrations/007_portals.sql`
+   (Auth/Phase 7 needs no new migration — it reuses `users`/`roles` from 001.)
 3. Copy `.env.example` to `.env` and fill in your Supabase URL + service
-   role key (Project Settings → API).
+   role key (Project Settings → API), plus a random `JWT_SECRET` (used to
+   sign this API's own tokens — see the Auth section below).
 4. Install and run:
    ```
    npm install
@@ -131,44 +146,87 @@ the natural landing views for each role after sign-in.
    ```
 5. API runs at `http://localhost:4000`.
 
-## Temporary tenant handling (until login is built)
+## Auth
 
-There's no auth yet, so every request to `/api/*` (except `/api/health`)
-must include a header:
+Real login/auth is now wired in — the old `x-school-id` header stand-in is
+gone. Every protected route reads `req.schoolId`, `req.userId`, and
+`req.roles` from a verified JWT instead.
 
-```
-x-school-id: <uuid of a row in the schools table>
-```
+**How it works:** Supabase Auth stores credentials and verifies passwords
+(proper hashing, etc). Once a login succeeds, this API signs its **own**
+JWT (via `JWT_SECRET`, not Supabase's own token) containing
+`{ sub: userId, school_id, roles }`, and that's what you send as
+`Authorization: Bearer <token>` on every other request. This means no
+manual Supabase Dashboard configuration (Auth Hooks, custom claims) was
+needed to get this working.
 
-This is enforced by `src/middleware/tenantContext.js` and is **not
-secure** — it's a stand-in so Student Management can be built and tested
-now. When login/auth is added:
+### Auth endpoints
 
-1. Supabase Auth will issue a JWT with a `school_id` custom claim.
-2. The RLS policies already in the migrations (`current_school_id()`)
-   will start enforcing tenant isolation at the database level.
-3. Swap the backend from the service-role key to the user's JWT
-   (or keep service-role + verify JWT in middleware — either works),
-   and `tenantContext.js` reads `school_id` from the verified token
-   instead of the header.
+| Endpoint | Notes |
+|---|---|
+| `POST /api/auth/register-school` | **public** — onboards a brand-new school + its first user (owner). `{ school_name, subdomain, owner_full_name, owner_email, owner_password }` → returns a token immediately |
+| `POST /api/auth/login` | **public** — `{ email, password }` → `{ token, user }` |
+| `POST /api/auth/register` | **protected**, restricted to `school_owner`/`principal`/`registrar`/`super_admin` roles — creates additional staff/parent/student accounts within the caller's own school. `{ email, password, full_name, phone?, role }` |
+| `GET /api/auth/me` | **protected** — current user's profile + roles |
 
-No schema changes needed at that point — this was designed for it.
+Every other route under `/api/*` (students, finance, exams, etc.) now
+requires `Authorization: Bearer <token>` — get one from `login` or
+`register-school` first.
+
+### Roles
+
+`role` in `/register` and `/register-school` is a free-text string —
+`roles` is a simple per-school lookup table (already existed from Phase
+0), so any role name works and gets created on first use. Use whatever
+matches your school's structure: `school_owner`, `principal`, `teacher`,
+`parent`, `student`, `accountant`, etc.
+
+### Locking down more routes
+
+Only `/api/auth/register` is role-restricted so far (via the
+`requireRole()` middleware in `src/middleware/authenticate.js`). Every
+other route just requires *any* valid token right now — it doesn't yet
+check *which* role is calling it. To restrict something further, add
+`requireRole('teacher', 'class_teacher')` (or whichever roles apply) as
+middleware on that specific route, the same way `authRoutes.js` does it.
+This wasn't retrofitted onto all ~40 existing routes in this pass —
+worth doing incrementally as you decide which actions should be
+role-gated.
+
+### Old temporary file
+
+`src/middleware/tenantContext.js` (the old `x-school-id` header stand-in)
+is no longer referenced anywhere — `app.js` now uses
+`src/middleware/authenticate.js` instead. You can delete
+`tenantContext.js` from your repo; it's dead code at this point.
 
 ## Testing it now
 
-First, insert a school and get its id (via Supabase table editor or SQL):
-
-```sql
-insert into schools (name, subdomain) values ('Test Academy', 'test-academy') returning id;
-```
-
-Then, with that id as `x-school-id`:
+First, register a school (this replaces the old manual SQL insert) and
+grab the token it returns:
 
 ```bash
+curl -X POST http://localhost:4000/api/auth/register-school \
+  -H "Content-Type: application/json" \
+  -d '{
+    "school_name": "Test Academy",
+    "subdomain": "test-academy",
+    "owner_full_name": "Jane Owner",
+    "owner_email": "owner@test-academy.com",
+    "owner_password": "a-strong-password"
+  }'
+```
+
+That returns `{ data: { token, school, user } }` — save the `token`, then
+use it as a Bearer token on everything else:
+
+```bash
+TOKEN="<paste the token here>"
+
 # Create a student
 curl -X POST http://localhost:4000/api/students \
   -H "Content-Type: application/json" \
-  -H "x-school-id: <school-id>" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "admission_number": "ADM001",
     "first_name": "Jane",
@@ -180,21 +238,29 @@ curl -X POST http://localhost:4000/api/students \
   }'
 
 # List students
-curl "http://localhost:4000/api/students?page=1&limit=20" -H "x-school-id: <school-id>"
+curl "http://localhost:4000/api/students?page=1&limit=20" -H "Authorization: Bearer $TOKEN"
 
 # Search
-curl "http://localhost:4000/api/students?q=Jane" -H "x-school-id: <school-id>"
+curl "http://localhost:4000/api/students?q=Jane" -H "Authorization: Bearer $TOKEN"
 
 # Get one
-curl http://localhost:4000/api/students/<student-id> -H "x-school-id: <school-id>"
+curl http://localhost:4000/api/students/<student-id> -H "Authorization: Bearer $TOKEN"
 
 # Update
 curl -X PATCH http://localhost:4000/api/students/<student-id> \
-  -H "Content-Type: application/json" -H "x-school-id: <school-id>" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
   -d '{"status": "active"}'
 
 # Soft delete
-curl -X DELETE http://localhost:4000/api/students/<student-id> -H "x-school-id: <school-id>"
+curl -X DELETE http://localhost:4000/api/students/<student-id> -H "Authorization: Bearer $TOKEN"
+```
+
+On subsequent runs, log back in instead of re-registering the school:
+
+```bash
+curl -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "owner@test-academy.com", "password": "a-strong-password"}'
 ```
 
 ## Project structure
@@ -203,17 +269,27 @@ curl -X DELETE http://localhost:4000/api/students/<student-id> -H "x-school-id: 
 migrations/           SQL migrations (run in order in Supabase SQL editor)
 src/
   config/supabase.js  Supabase client
-  middleware/          tenantContext (temp), errorHandler
-  controllers/         studentController.js
-  routes/              studentRoutes.js, index.js
+  middleware/          authenticate.js (auth + requireRole), errorHandler.js
+  controllers/         one per resource/module — students, finance, exams, auth, etc.
+  routes/               one per resource, plus index.js mounting them all
+  utils/               crudFactory.js, routeFactory.js (shared CRUD pattern), mpesaService.js
   app.js               Express app + middleware wiring
   server.js            Entry point
 ```
 
-## Next up (Phase 7 — the last one)
+## Status: all phases complete
 
-Login/auth: Supabase Auth issuing JWTs with a `school_id` custom claim,
-replacing the temporary `x-school-id` header in `tenantContext.js`. Once
-that's in, the RLS policies already sitting in every migration start
-enforcing tenant isolation at the database level and this whole system
-moves from "dev-mode" to production-safe.
+Every module from the original spec is built and wired together:
+foundation/multi-tenancy, Student Management, Academic Management,
+Attendance, Finance (incl. live M-Pesa STK push), Exams, Portals, and
+now Auth. `src/middleware/tenantContext.js` is dead code — safe to
+delete.
+
+**Reasonable next steps from here**, roughly in order of value:
+1. Lock down more routes with `requireRole()` (see the Auth section above)
+2. Add automated tests (none exist yet — this was built for speed of
+   iteration, not test coverage)
+3. API documentation (Swagger/OpenAPI, per the original spec)
+4. Any of the modules the original spec listed that this build
+   intentionally scoped down (Library, Hostel, Transport, Inventory, HR,
+   AI features, multi-school branding/subdomain routing, PWA/offline)

@@ -51,10 +51,11 @@ async function initiate(req, res, next) {
 
 // ------------------------------------------------------------
 // POST /api/finance/payments/mpesa/callback
-// Public endpoint Safaricom's Daraja API POSTs to. No tenant header
-// available here — the school is resolved from the stored payment row
-// via CheckoutRequestID, not from x-school-id. NOT behind tenantContext
-// middleware — see routes/mpesaRoutes.js.
+// Public endpoint Safaricom's Daraja API POSTs to. No auth token is sent
+// by Safaricom, so the school is resolved from the stored payment row via
+// CheckoutRequestID instead. Registered directly in app.js, ahead of the
+// authenticate-protected /api mount — not reachable through this file's
+// `initiate` route or any other authenticated route.
 // ------------------------------------------------------------
 async function callback(req, res, next) {
   try {

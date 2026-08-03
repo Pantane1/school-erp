@@ -1,7 +1,7 @@
 {
   "name": "school-erp-backend",
   "version": "0.1.0",
-  "description": "Multi-tenant School ERP SaaS — backend API (Phase 0 + Student Management)",
+  "description": "Multi-tenant School ERP SaaS — backend API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -13,7 +13,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
-    "helmet": "^7.1.0"
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
