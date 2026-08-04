@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bookController = require('../controllers/bookController');
-const borrowingController = require('../controllers/borrowingController');
+const borrowingController = require('../controllers/borrowingcontroller');
 const { buildCrudRouter } = require('../utils/routeFactory');
 
 router.use('/books', buildCrudRouter(bookController));

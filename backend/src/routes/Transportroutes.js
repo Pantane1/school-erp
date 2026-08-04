@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const vehicleController = require('../controllers/transportVehicleController');
+const vehicleController = require('../controllers/transportvehiclecontroller');
 const routeController = require('../controllers/transportRouteController');
 const pickupPointController = require('../controllers/pickupPointController');
 const studentTransportController = require('../controllers/studentTransportController');
